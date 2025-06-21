@@ -1,14 +1,12 @@
 import os
+import json
 import google.generativeai as genai
 from flask import Flask, request, jsonify, render_template, abort
 
 # --- 초기 설정 ---
-# Flask 앱 초기화 및 템플릿 폴더 지정
 app = Flask(__name__, template_folder='templates')
 
 # Gemini API 키 설정
-# Render와 같은 배포 플랫폼의 '환경 변수'에 키를 저장하는 것이 가장 안전합니다.
-# 코드에 직접 API 키를 작성하지 마세요.
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
     if not gemini_api_key:
@@ -17,21 +15,15 @@ try:
 except (ValueError, AttributeError) as e:
     # 이 부분은 서버 로그에만 표시됩니다.
     print(f"API 키 설정 오류: {e}")
-    # 프로그램 실행을 중단하지 않고, 나중에 API 호출 시 오류를 처리합니다.
 
-
-# --- 라우팅 (URL 경로 설정) ---
+# --- 라우팅 ---
 
 @app.route('/')
 def index():
-    """메인 HTML 페이지를 렌더링합니다."""
     return render_template('index.html')
 
 @app.route('/api/find-recipe', methods=['POST'])
 def find_recipe_api():
-    """프론트엔드로부터 재료를 받아 Gemini API로 레시피를 검색하고 결과를 반환합니다."""
-    
-    # API 키가 설정되지 않았다면, 여기서 요청을 중단시킵니다.
     if not genai.api_key:
         return jsonify({"error": "서버의 API 키가 설정되지 않았습니다. 관리자에게 문의하세요."}), 500
 
@@ -90,7 +82,18 @@ Do not include any text or explanations outside of the final JSON array.
 """
         
         response = model.generate_content(prompt)
-        return response.text, 200, {'Content-Type': 'application/json'}
+        
+        # Gemini 응답이 올바른 JSON인지 백엔드에서 먼저 검증
+        try:
+            # response.text가 올바른 JSON 형식인지 파싱 시도
+            parsed_json = json.loads(response.text)
+            # 성공하면 jsonify를 사용해 안전하게 JSON 응답 생성
+            return jsonify(parsed_json)
+        except json.JSONDecodeError:
+            # Gemini가 JSON이 아닌 다른 텍스트를 반환한 경우
+            print("Warning: Gemini response was not valid JSON. Response text:", response.text)
+            return jsonify({"error": "AI가 레시피를 생성하는 데 실패했습니다. 잠시 후 다른 재료로 시도해보세요."}), 500
+
 
     except Exception as e:
         print(f"An error occurred during Gemini API call: {e}")
@@ -98,5 +101,4 @@ Do not include any text or explanations outside of the final JSON array.
 
 # 로컬 테스트용 서버 실행 코드
 if __name__ == '__main__':
-    # debug=True는 코드 변경 시 서버 자동 재시작 (배포 시에는 False 또는 제거)
     app.run(port=5001, debug=True)

@@ -86,7 +86,7 @@
         <div class="bg-white p-6 rounded-2xl shadow-lg">
             <div class="flex items-center space-x-4">
                 <div id="tag-container" class="tag-container w-full">
-                    <input type="text" id="ingredients-input" class="tag-input" placeholder="재료 입력 후 스페이스/엔터...">
+                    <input type="text" id="ingredients-input" class="tag-input" placeholder="재료 입력 후 엔터...">
                 </div>
                 <div class="flex flex-col items-center space-y-2">
                      <label for="result-count" class="text-sm font-medium text-gray-600">결과 개수</label>
@@ -137,12 +137,15 @@
         const md = window.markdownit();
 
         tagContainer.addEventListener('click', () => { input.focus(); });
-
-        input.addEventListener('keyup', (e) => {
-            if (e.code === 'Space' || e.code === 'Enter') {
-                e.preventDefault();
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // 엔터 키의 기본 동작(폼 제출 등)을 막습니다.
                 const text = input.value.trim();
-                if (text) { addTag(text); input.value = ''; }
+                if (text) {
+                    addTag(text);
+                    input.value = '';
+                }
             }
         });
 
@@ -197,7 +200,6 @@
             findBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                // 백엔드 API에 요청 전송
                 const response = await fetch('/api/find-recipe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -208,21 +210,26 @@
                     })
                 });
 
+                const responseText = await response.text();
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || '서버에서 오류가 발생했습니다.');
+                    try {
+                        const errorData = JSON.parse(responseText);
+                        throw new Error(errorData.error || '서버에서 오류가 발생했습니다.');
+                    } catch (e) {
+                        throw new Error(`서버 응답 오류: ${responseText}`);
+                    }
                 }
 
-                const recipes = await response.json();
+                const recipes = JSON.parse(responseText);
                 displayResults(recipes);
 
             } catch (error) {
                 console.error("Error:", error);
-                recipeResultArea.innerHTML = `<div class="bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center text-red-500">
-                    <h3 class="font-bold">앗, 오류가 발생했어요!</h3>
-                    <p class="mt-2">${error.message}</p>
-                    <p class="mt-1 text-sm text-gray-500">잠시 후 다시 시도해주세요.</p>
-                </div>`;
+                const errorElement = document.createElement('div');
+                errorElement.className = "bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center text-red-500";
+                errorElement.innerHTML = `<h3 class="font-bold">앗, 오류가 발생했어요!</h3><p class="mt-2"></p><p class="mt-1 text-sm text-gray-500">잠시 후 다시 시도해주세요.</p>`;
+                errorElement.querySelector('p').textContent = error.message;
+                recipeResultArea.appendChild(errorElement);
             } finally {
                 loaderContainer.classList.add('hidden');
                 loaderContainer.classList.remove('flex');
