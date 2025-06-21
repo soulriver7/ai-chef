@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 셰프 - 당신의 냉장고를 위한 레시피</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .notion-style-result h3 {
+            border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; margin-top: 24px;
+            margin-bottom: 16px; font-size: 1.25rem; font-weight: 700;
+        }
+        .notion-style-result ul, .notion-style-result ol {
+            padding-left: 24px; margin-bottom: 16px;
+        }
+        .notion-style-result li {
+            margin-bottom: 8px;
+        }
+        .tag-container {
+            display: flex; flex-wrap: wrap; align-items: center; padding: 8px;
+            border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: text;
+        }
+        .tag {
+            display: flex; align-items: center; background-color: #e0e7ff;
+            color: #4338ca; border-radius: 9999px; padding: 4px 12px;
+            margin: 4px; font-size: 0.875rem; font-weight: 500;
+        }
+        .detailed-tag {
+            background-color: #d1fae5; color: #065f46;
+        }
+        .tag-remove-btn {
+            margin-left: 8px; cursor: pointer; font-weight: bold;
+        }
+        .tag-input {
+            flex-grow: 1; border: none; outline: none; padding: 8px;
+            font-size: 1.125rem; background-color: transparent; min-width: 150px;
+        }
+        .category-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .category-selected {
+            background-color: #3b82f6 !important;
+            color: white !important;
+            border-color: #3b82f6 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">AI 셰프</h1>
+            <p class="mt-2 text-lg text-gray-600">냉장고 속 재료를 알려주시면, 최고의 요리를 찾아드려요.</p>
+        </header>
+
+        <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-3 text-center">어떤 종류의 요리를 원하세요?</h3>
+            <div id="category-container" class="flex flex-wrap justify-center gap-2">
+                <button onclick="selectCategory(this, '전체')" class="category-btn category-selected font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 전체</button>
+                <button onclick="selectCategory(this, '한식')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 한식</button>
+                <button onclick="selectCategory(this, '양식')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 양식</button>
+                <button onclick="selectCategory(this, '일식')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 일식</button>
+                <button onclick="selectCategory(this, '중식')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 중식</button>
+                <button onclick="selectCategory(this, '분식')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 분식</button>
+                <button onclick="selectCategory(this, '퓨전')" class="category-btn font-semibold px-4 py-2 bg-white border border-gray-300 rounded-full text-gray-700 hover:bg-gray-100"># 퓨전</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-lg">
+            <div class="flex items-center space-x-4">
+                <div id="tag-container" class="tag-container w-full">
+                    <input type="text" id="ingredients-input" class="tag-input" placeholder="재료 입력 후 스페이스/엔터...">
+                </div>
+                <div class="flex flex-col items-center space-y-2">
+                     <label for="result-count" class="text-sm font-medium text-gray-600">결과 개수</label>
+                    <select id="result-count" class="border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 px-2 py-1">
+                        <option value="1">1</option>
+                        <option value="3" selected>3</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                    </select>
+                </div>
+                <button id="find-recipe-btn" onclick="findRecipe()" class="bg-blue-600 text-white font-bold text-lg px-6 py-3 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 whitespace-nowrap self-center">
+                    레시피 찾기
+                </button>
+            </div>
+            
+            <div class="mt-4">
+                <button onclick="toggleDetailedSearch()" id="detailed-search-btn" class="text-sm text-blue-600 hover:text-blue-800">+ 상세 조건 추가</button>
+                <div id="detailed-search-area" class="hidden mt-4 p-4 border border-gray-200 rounded-lg">
+                    <div class="flex items-end space-x-2">
+                        <div class="flex-grow">
+                            <label for="detailed-name" class="block text-sm font-medium text-gray-700">재료명</label>
+                            <input type="text" id="detailed-name" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex-grow">
+                            <label for="detailed-quantity" class="block text-sm font-medium text-gray-700">수량 / 상태 (선택)</label>
+                            <input type="text" id="detailed-quantity" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <button onclick="addDetailedTag()" class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 whitespace-nowrap">추가</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="result-container" class="mt-8">
+            <div id="loader-container" class="hidden flex-col items-center justify-center bg-white p-8 rounded-2xl shadow-lg">
+                <div class="loader mb-4"></div>
+                <p class="text-gray-600">최고의 레시피를 찾고 있어요...</p>
+            </div>
+            <div id="recipe-result-area"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/14.0.0/markdown-it.min.js"></script>
+    <script>
+        const tagContainer = document.getElementById('tag-container');
+        const input = document.getElementById('ingredients-input');
+        let selectedCategory = '전체';
+        const md = window.markdownit();
+
+        tagContainer.addEventListener('click', () => { input.focus(); });
+
+        input.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (text) { addTag(text); input.value = ''; }
+            }
+        });
+
+        function selectCategory(element, category) {
+            document.querySelectorAll('#category-container .category-btn').forEach(btn => btn.classList.remove('category-selected'));
+            element.classList.add('category-selected');
+            selectedCategory = category;
+        }
+
+        function toggleDetailedSearch() {
+            const area = document.getElementById('detailed-search-area');
+            const btn = document.getElementById('detailed-search-btn');
+            area.classList.toggle('hidden');
+            btn.textContent = area.classList.contains('hidden') ? '+ 상세 조건 추가' : '- 상세 조건 닫기';
+        }
+
+        function addTag(text, isDetailed = false) {
+            const tag = document.createElement('div');
+            tag.className = isDetailed ? 'tag detailed-tag' : 'tag';
+            tag.innerHTML = `<span>${text}</span><span class="tag-remove-btn" onclick="this.parentElement.remove()">x</span>`;
+            tagContainer.insertBefore(tag, input);
+        }
+
+        function addDetailedTag() {
+            const nameInput = document.getElementById('detailed-name');
+            const quantityInput = document.getElementById('detailed-quantity');
+            const name = nameInput.value.trim();
+            if (!name) { alert('상세 추가할 재료명을 입력해주세요.'); return; }
+            const quantity = quantityInput.value.trim();
+            addTag(quantity ? `${name} (${quantity})` : name, true);
+            nameInput.value = ''; quantityInput.value = ''; nameInput.focus();
+        }
+
+        async function findRecipe() {
+            const findBtn = document.getElementById('find-recipe-btn');
+            const tags = tagContainer.querySelectorAll('.tag');
+            if (tags.length === 0) {
+                alert('재료를 하나 이상 입력해주세요!');
+                return;
+            }
+
+            const ingredients = Array.from(tags).map(tag => tag.firstChild.textContent).join(', ');
+            const resultCount = document.getElementById('result-count').value;
+            
+            const loaderContainer = document.getElementById('loader-container');
+            const recipeResultArea = document.getElementById('recipe-result-area');
+            
+            recipeResultArea.innerHTML = '';
+            loaderContainer.classList.remove('hidden');
+            loaderContainer.classList.add('flex');
+            findBtn.disabled = true;
+            findBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                // 백엔드 API에 요청 전송
+                const response = await fetch('/api/find-recipe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ingredients: ingredients,
+                        category: selectedCategory,
+                        count: resultCount
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '서버에서 오류가 발생했습니다.');
+                }
+
+                const recipes = await response.json();
+                displayResults(recipes);
+
+            } catch (error) {
+                console.error("Error:", error);
+                recipeResultArea.innerHTML = `<div class="bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center text-red-500">
+                    <h3 class="font-bold">앗, 오류가 발생했어요!</h3>
+                    <p class="mt-2">${error.message}</p>
+                    <p class="mt-1 text-sm text-gray-500">잠시 후 다시 시도해주세요.</p>
+                </div>`;
+            } finally {
+                loaderContainer.classList.add('hidden');
+                loaderContainer.classList.remove('flex');
+                findBtn.disabled = false;
+                findBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        function displayResults(recipes) {
+            const recipeResultArea = document.getElementById('recipe-result-area');
+            recipeResultArea.innerHTML = '';
+
+            if (!recipes || recipes.length === 0) {
+                recipeResultArea.innerHTML = `<div class="bg-white p-6 md:p-8 rounded-2xl shadow-lg text-center">
+                    <h3 class="font-bold">관련 레시피를 찾지 못했어요.</h3>
+                    <p class="mt-2 text-sm text-gray-500">다른 재료로 검색해보세요!</p>
+                </div>`;
+                return;
+            }
+
+            recipes.forEach(recipe => {
+                const recipeCard = document.createElement('div');
+                recipeCard.className = 'bg-white p-6 md:p-8 rounded-2xl shadow-lg mb-6';
+                
+                const summaryHtml = md.render(recipe.summary);
+
+                recipeCard.innerHTML = `
+                    <h2 class="text-2xl font-bold mb-4">${recipe.title}</h2>
+                    <div class="aspect-w-16 aspect-h-9 mb-4">
+                        <iframe class="rounded-lg w-full" style="height: 400px" src="https://www.youtube.com/embed/${recipe.videoId}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">
+                        <strong>원본 영상 출처:</strong> 
+                        <a href="https://www.youtube.com/watch?v=${recipe.videoId}" target="_blank" class="text-blue-600 hover:underline">https://www.youtube.com/watch?v=${recipe.videoId}</a>
+                    </p>
+                    <div class="notion-style-result">${summaryHtml}</div>
+                `;
+                recipeResultArea.appendChild(recipeCard);
+            });
+        }
+    </script>
+</body>
+</html>
